@@ -120,13 +120,22 @@ namespace Azure.Core
                 }
 
                 int? pageSize = pageSizeHint ?? _defaultPageSize;
-                do
+                Page<T> pageResponse = await pageFunc(continuationToken, pageSize).ConfigureAwait(false);
+
+                if (_nextPageFunc != null)
                 {
-                    Page<T> pageResponse = await pageFunc(continuationToken, pageSize).ConfigureAwait(false);
-                    yield return pageResponse;
-                    continuationToken = pageResponse.ContinuationToken;
-                    pageFunc = _nextPageFunc;
-                } while (!string.IsNullOrEmpty(continuationToken) && pageFunc != null);
+                    while (!string.IsNullOrEmpty(pageResponse.ContinuationToken))
+                    {
+                        ConfiguredTaskAwaitable<Page<T>> nextPageResponse;
+
+                        nextPageResponse = _nextPageFunc(pageResponse.ContinuationToken, pageSize).ConfigureAwait(false);
+                        yield return pageResponse;
+
+                        pageResponse = await nextPageResponse;
+                    }
+                }
+
+                yield return pageResponse;
             }
         }
 
